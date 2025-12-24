@@ -11,14 +11,14 @@ function App() {
   // 음성 합성 기능
   const speak = (number) => {
     if (!voiceEnabled) return;
-    
+
     // 이전 음성이 진행 중이면 중지
     if (speechRef.current) {
       window.speechSynthesis.cancel();
     }
 
     const utterance = new SpeechSynthesisUtterance(number.toString());
-    
+
     // 한국어 음성 설정
     const voices = window.speechSynthesis.getVoices();
     const koreanVoice = voices.find(voice => voice.lang.includes('ko'));
@@ -143,21 +143,21 @@ function App() {
           </div>
 
           <div className="controls">
-            <button 
+            <button
               className={isRunning ? "btn btn-secondary" : "btn btn-primary"}
               onClick={toggleCounter}
             >
               <span>{isRunning ? '⏸ 일시정지' : '▶ 시작'}</span>
             </button>
-            
-            <button 
+
+            <button
               className="btn btn-danger"
               onClick={resetCounter}
             >
               <span>↻ 리셋</span>
             </button>
 
-            <button 
+            <button
               className={voiceEnabled ? "btn btn-primary" : "btn btn-secondary"}
               onClick={toggleVoice}
             >
@@ -170,7 +170,7 @@ function App() {
         <div className="status-indicator">
           <div className={`status-dot ${isRunning ? 'active' : ''} ${isSpeaking ? 'speaking' : ''}`}></div>
           <span className="status-text">
-            {isSpeaking ? '음성 재생 중...' : isRunning ? '카운터 실행 중' : '대기 중'}
+            {isSpeaking ? '카운터 실행 중' : isRunning ? '카운터 실행 중' : '대기 중'}
           </span>
         </div>
       </div>
