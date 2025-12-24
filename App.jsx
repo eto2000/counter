@@ -6,13 +6,38 @@ function App() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [voicesLoaded, setVoicesLoaded] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
   const intervalRef = useRef(null);
   const speechRef = useRef(null);
   const voiceRef = useRef(null);
+  const audioContextRef = useRef(null);
+
+  // iOS 감지
+  useEffect(() => {
+    const iOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    setIsIOS(iOS);
+    console.log('iOS 기기:', iOS);
+  }, []);
+
+  // 음성 컨텍스트 초기화 (iOS용)
+  const initializeSpeech = () => {
+    if (isIOS && window.speechSynthesis) {
+      // iOS에서 speechSynthesis를 활성화하기 위한 더미 발화
+      const utterance = new SpeechSynthesisUtterance('');
+      utterance.volume = 0;
+      window.speechSynthesis.speak(utterance);
+      console.log('iOS 음성 엔진 초기화됨');
+    }
+  };
 
   // 음성 합성 기능
   const speak = (number) => {
     if (!voiceEnabled || !voicesLoaded) return;
+
+    // iOS의 경우 speechSynthesis 상태 확인 및 재시작
+    if (isIOS && window.speechSynthesis.paused) {
+      window.speechSynthesis.resume();
+    }
 
     // 이전 음성이 진행 중이면 중지
     if (speechRef.current) {
@@ -39,17 +64,30 @@ function App() {
       speechRef.current = null;
     };
 
-    utterance.onerror = () => {
+    utterance.onerror = (event) => {
+      console.error('음성 재생 오류:', event);
       setIsSpeaking(false);
       speechRef.current = null;
     };
 
     speechRef.current = utterance;
-    window.speechSynthesis.speak(utterance);
+
+    // iOS의 경우 약간의 지연 추가
+    if (isIOS) {
+      setTimeout(() => {
+        window.speechSynthesis.speak(utterance);
+      }, 100);
+    } else {
+      window.speechSynthesis.speak(utterance);
+    }
   };
 
   // 카운터 시작/중지
   const toggleCounter = () => {
+    // iOS에서 처음 시작할 때 음성 엔진 초기화
+    if (!isRunning && isIOS) {
+      initializeSpeech();
+    }
     setIsRunning(!isRunning);
   };
 
@@ -100,6 +138,9 @@ function App() {
 
   // 음성 목록 로드 및 초기화 (일부 브라우저에서 필요)
   useEffect(() => {
+    let retryCount = 0;
+    const maxRetries = 5;
+
     const loadVoices = () => {
       const voices = window.speechSynthesis.getVoices();
 
@@ -108,11 +149,21 @@ function App() {
         const koreanVoice = voices.find(voice => voice.lang.includes('ko'));
         if (koreanVoice) {
           voiceRef.current = koreanVoice;
+          console.log('한국어 음성 찾음:', koreanVoice.name);
+        } else {
+          // 한국어 음성이 없으면 기본 음성 사용
+          voiceRef.current = voices[0];
+          console.log('기본 음성 사용:', voices[0].name);
         }
 
         // 음성이 준비되면 즉시 사용 가능하도록 설정
         setVoicesLoaded(true);
-        console.log('음성 엔진이 준비되었습니다.');
+        console.log('음성 엔진이 준비되었습니다. (총 음성 수:', voices.length + ')');
+      } else if (retryCount < maxRetries) {
+        // 음성이 아직 로드되지 않았으면 재시도
+        retryCount++;
+        console.log('음성 로드 재시도...', retryCount);
+        setTimeout(loadVoices, 200 * retryCount);
       }
     };
 
