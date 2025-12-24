@@ -5,12 +5,14 @@ function App() {
   const [isRunning, setIsRunning] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [voicesLoaded, setVoicesLoaded] = useState(false);
   const intervalRef = useRef(null);
   const speechRef = useRef(null);
+  const voiceRef = useRef(null);
 
   // 음성 합성 기능
   const speak = (number) => {
-    if (!voiceEnabled) return;
+    if (!voiceEnabled || !voicesLoaded) return;
 
     // 이전 음성이 진행 중이면 중지
     if (speechRef.current) {
@@ -19,11 +21,9 @@ function App() {
 
     const utterance = new SpeechSynthesisUtterance(number.toString());
 
-    // 한국어 음성 설정
-    const voices = window.speechSynthesis.getVoices();
-    const koreanVoice = voices.find(voice => voice.lang.includes('ko'));
-    if (koreanVoice) {
-      utterance.voice = koreanVoice;
+    // 미리 저장된 한국어 음성 사용
+    if (voiceRef.current) {
+      utterance.voice = voiceRef.current;
     }
     utterance.lang = 'ko-KR';
     utterance.rate = 1.0; // 속도
@@ -98,14 +98,37 @@ function App() {
     };
   }, [isRunning]);
 
-  // 음성 목록 로드 (일부 브라우저에서 필요)
+  // 음성 목록 로드 및 초기화 (일부 브라우저에서 필요)
   useEffect(() => {
+    const loadVoices = () => {
+      const voices = window.speechSynthesis.getVoices();
+
+      if (voices.length > 0) {
+        // 한국어 음성 찾기 및 저장
+        const koreanVoice = voices.find(voice => voice.lang.includes('ko'));
+        if (koreanVoice) {
+          voiceRef.current = koreanVoice;
+        }
+
+        // 음성이 준비되면 즉시 사용 가능하도록 설정
+        setVoicesLoaded(true);
+        console.log('음성 엔진이 준비되었습니다.');
+      }
+    };
+
+    // 음성 목록이 이미 로드되어 있을 수 있음
+    loadVoices();
+
+    // voiceschanged 이벤트 리스너 추가
     if (window.speechSynthesis) {
-      window.speechSynthesis.getVoices();
-      window.speechSynthesis.onvoiceschanged = () => {
-        window.speechSynthesis.getVoices();
-      };
+      window.speechSynthesis.onvoiceschanged = loadVoices;
     }
+
+    return () => {
+      if (window.speechSynthesis) {
+        window.speechSynthesis.onvoiceschanged = null;
+      }
+    };
   }, []);
 
   // 컴포넌트 언마운트 시 정리
