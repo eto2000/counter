@@ -6,10 +6,11 @@
   "display": "standalone",
   "background_color": "#0a0a0f",
   "theme_color": "#6366f1",
-  "orientation": "portrait",
+  "orientation": "portrait-primary",
   "scope": "/",
   "lang": "ko",
   "categories": ["utilities", "productivity"],
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "icons/icon-192x192.png",

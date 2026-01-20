@@ -34,9 +34,13 @@ class PWAInstaller {
     this.isInstalled = this.isStandalone || 
                       localStorage.getItem('pwa-installed') === 'true';
     
+    // iOS 감지
+    this.isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    
     console.log('PWA Status:', {
       isStandalone: this.isStandalone,
-      isInstalled: this.isInstalled
+      isInstalled: this.isInstalled,
+      isIOS: this.isIOS
     });
   }
 
@@ -70,7 +74,18 @@ class PWAInstaller {
   }
 
   setupInstallPrompt() {
-    // Listen for beforeinstallprompt event
+    // iOS Safari는 beforeinstallprompt 이벤트를 지원하지 않음
+    if (this.isIOS) {
+      // iOS에서는 수동으로 설치 안내 표시
+      if (!this.isInstalled) {
+        setTimeout(() => {
+          this.showIOSInstallInstructions();
+        }, 3000); // 3초 후 안내 표시
+      }
+      return;
+    }
+
+    // Listen for beforeinstallprompt event (Android/Desktop)
     window.addEventListener('beforeinstallprompt', (e) => {
       console.log('PWA: Install prompt available');
       
@@ -298,6 +313,119 @@ class PWAInstaller {
         document.body.removeChild(notification);
       }
     }, 3000);
+  }
+
+  showIOSInstallInstructions() {
+    // iOS Safari 전용 설치 안내
+    const modal = document.createElement('div');
+    modal.id = 'ios-install-modal';
+    modal.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      z-index: 2000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      backdrop-filter: blur(10px);
+    `;
+
+    const content = document.createElement('div');
+    content.style.cssText = `
+      background: rgba(30, 30, 40, 0.95);
+      border-radius: 16px;
+      padding: 24px;
+      max-width: 350px;
+      width: 100%;
+      color: white;
+      font-family: 'Inter', sans-serif;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+    `;
+
+    content.innerHTML = `
+      <div style="text-align: center; margin-bottom: 20px;">
+        <div style="font-size: 48px; margin-bottom: 12px;">📱</div>
+        <h3 style="margin: 0 0 8px 0; font-size: 18px; font-weight: 600;">앱으로 설치하기</h3>
+        <p style="margin: 0; font-size: 14px; color: #a1a1aa;">홈 화면에 추가하여 앱처럼 사용하세요</p>
+      </div>
+      
+      <div style="margin-bottom: 20px;">
+        <div style="display: flex; align-items: center; margin-bottom: 12px; font-size: 14px;">
+          <span style="margin-right: 12px; font-size: 20px;">1️⃣</span>
+          <span>하단의 <strong>공유</strong> 버튼 (📤) 탭</span>
+        </div>
+        <div style="display: flex; align-items: center; margin-bottom: 12px; font-size: 14px;">
+          <span style="margin-right: 12px; font-size: 20px;">2️⃣</span>
+          <span><strong>"홈 화면에 추가"</strong> 선택</span>
+        </div>
+        <div style="display: flex; align-items: center; font-size: 14px;">
+          <span style="margin-right: 12px; font-size: 20px;">3️⃣</span>
+          <span><strong>"추가"</strong> 버튼 탭</span>
+        </div>
+      </div>
+      
+      <div style="display: flex; gap: 12px;">
+        <button id="ios-install-later" style="
+          flex: 1;
+          background: transparent;
+          color: #a1a1aa;
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          padding: 12px;
+          border-radius: 8px;
+          font-size: 14px;
+          cursor: pointer;
+        ">나중에</button>
+        <button id="ios-install-ok" style="
+          flex: 1;
+          background: #6366f1;
+          color: white;
+          border: none;
+          padding: 12px;
+          border-radius: 8px;
+          font-size: 14px;
+          font-weight: 600;
+          cursor: pointer;
+        ">확인</button>
+      </div>
+    `;
+
+    modal.appendChild(content);
+    document.body.appendChild(modal);
+
+    // 버튼 이벤트
+    document.getElementById('ios-install-ok').addEventListener('click', () => {
+      document.body.removeChild(modal);
+      localStorage.setItem('ios-install-shown', 'true');
+    });
+
+    document.getElementById('ios-install-later').addEventListener('click', () => {
+      document.body.removeChild(modal);
+      // 24시간 후 다시 표시
+      localStorage.setItem('ios-install-dismissed', Date.now().toString());
+    });
+
+    // 배경 클릭으로 닫기
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        document.body.removeChild(modal);
+        localStorage.setItem('ios-install-dismissed', Date.now().toString());
+      }
+    });
+
+    // 이미 표시했거나 최근에 닫았으면 표시하지 않음
+    const wasShown = localStorage.getItem('ios-install-shown');
+    const wasDismissed = localStorage.getItem('ios-install-dismissed');
+    const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
+
+    if (wasShown || (wasDismissed && parseInt(wasDismissed) > oneDayAgo)) {
+      document.body.removeChild(modal);
+      return;
+    }
   }
 }
 
