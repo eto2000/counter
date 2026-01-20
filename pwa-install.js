@@ -1,0 +1,311 @@
+// PWA Installation and Service Worker Registration
+class PWAInstaller {
+  constructor() {
+    this.deferredPrompt = null;
+    this.isInstalled = false;
+    this.isStandalone = false;
+    
+    this.init();
+  }
+
+  init() {
+    // Check if app is already installed
+    this.checkInstallStatus();
+    
+    // Register service worker
+    this.registerServiceWorker();
+    
+    // Setup install prompt handling
+    this.setupInstallPrompt();
+    
+    // Setup app update handling
+    this.setupAppUpdate();
+    
+    // Add install button if needed
+    this.addInstallButton();
+  }
+
+  checkInstallStatus() {
+    // Check if running in standalone mode
+    this.isStandalone = window.matchMedia('(display-mode: standalone)').matches || 
+                      window.navigator.standalone === true;
+    
+    // Check if installed via other means
+    this.isInstalled = this.isStandalone || 
+                      localStorage.getItem('pwa-installed') === 'true';
+    
+    console.log('PWA Status:', {
+      isStandalone: this.isStandalone,
+      isInstalled: this.isInstalled
+    });
+  }
+
+  async registerServiceWorker() {
+    if ('serviceWorker' in navigator) {
+      try {
+        const registration = await navigator.serviceWorker.register('/sw.js', {
+          scope: '/'
+        });
+        
+        console.log('Service Worker registered successfully:', registration);
+        
+        // Handle updates
+        registration.addEventListener('updatefound', () => {
+          const newWorker = registration.installing;
+          
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              this.showUpdateNotification();
+            }
+          });
+        });
+        
+        return registration;
+      } catch (error) {
+        console.error('Service Worker registration failed:', error);
+      }
+    } else {
+      console.log('Service Worker not supported');
+    }
+  }
+
+  setupInstallPrompt() {
+    // Listen for beforeinstallprompt event
+    window.addEventListener('beforeinstallprompt', (e) => {
+      console.log('PWA: Install prompt available');
+      
+      // Prevent the mini-infobar from appearing on mobile
+      e.preventDefault();
+      
+      // Save the event so it can be triggered later
+      this.deferredPrompt = e;
+      
+      // Show install button
+      this.showInstallButton();
+    });
+
+    // Listen for app installed event
+    window.addEventListener('appinstalled', (e) => {
+      console.log('PWA: App installed successfully');
+      this.isInstalled = true;
+      localStorage.setItem('pwa-installed', 'true');
+      this.hideInstallButton();
+      this.showInstalledNotification();
+    });
+  }
+
+  setupAppUpdate() {
+    // Listen for service worker updates
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        console.log('PWA: New service worker activated');
+        window.location.reload();
+      });
+    }
+  }
+
+  addInstallButton() {
+    // Create install button container
+    const installContainer = document.createElement('div');
+    installContainer.id = 'pwa-install-container';
+    installContainer.style.cssText = `
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 1000;
+      display: none;
+    `;
+
+    // Create install button
+    const installButton = document.createElement('button');
+    installButton.id = 'pwa-install-button';
+    installButton.innerHTML = '📱 앱 설치';
+    installButton.style.cssText = `
+      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 25px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 16px rgba(99, 102, 241, 0.4);
+      transition: all 0.3s ease;
+      font-family: 'Inter', sans-serif;
+    `;
+
+    installButton.addEventListener('mouseenter', () => {
+      installButton.style.transform = 'translateY(-2px)';
+      installButton.style.boxShadow = '0 6px 24px rgba(99, 102, 241, 0.6)';
+    });
+
+    installButton.addEventListener('mouseleave', () => {
+      installButton.style.transform = 'translateY(0)';
+      installButton.style.boxShadow = '0 4px 16px rgba(99, 102, 241, 0.4)';
+    });
+
+    installButton.addEventListener('click', () => {
+      this.installApp();
+    });
+
+    installContainer.appendChild(installButton);
+    document.body.appendChild(installContainer);
+  }
+
+  showInstallButton() {
+    const container = document.getElementById('pwa-install-container');
+    if (container && !this.isInstalled) {
+      container.style.display = 'block';
+      
+      // Animate in
+      setTimeout(() => {
+        container.style.opacity = '1';
+        container.style.transform = 'translateY(0)';
+      }, 100);
+    }
+  }
+
+  hideInstallButton() {
+    const container = document.getElementById('pwa-install-container');
+    if (container) {
+      container.style.display = 'none';
+    }
+  }
+
+  async installApp() {
+    if (!this.deferredPrompt) {
+      console.log('PWA: No install prompt available');
+      return;
+    }
+
+    try {
+      // Show the install prompt
+      this.deferredPrompt.prompt();
+      
+      // Wait for the user to respond to the prompt
+      const { outcome } = await this.deferredPrompt.userChoice;
+      
+      console.log('PWA: Install prompt result:', outcome);
+      
+      if (outcome === 'accepted') {
+        console.log('PWA: User accepted the install prompt');
+      } else {
+        console.log('PWA: User dismissed the install prompt');
+      }
+      
+      // Clear the deferredPrompt
+      this.deferredPrompt = null;
+      this.hideInstallButton();
+      
+    } catch (error) {
+      console.error('PWA: Install failed:', error);
+    }
+  }
+
+  showUpdateNotification() {
+    // Create update notification
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(30, 30, 40, 0.95);
+      color: white;
+      padding: 16px 24px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(20px);
+      z-index: 1001;
+      font-family: 'Inter', sans-serif;
+      font-size: 14px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    `;
+    
+    notification.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <span>🔄 새 버전이 사용 가능합니다</span>
+        <button id="update-app" style="
+          background: #6366f1;
+          color: white;
+          border: none;
+          padding: 6px 12px;
+          border-radius: 6px;
+          font-size: 12px;
+          cursor: pointer;
+        ">업데이트</button>
+        <button id="dismiss-update" style="
+          background: transparent;
+          color: #a1a1aa;
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          padding: 6px 12px;
+          border-radius: 6px;
+          font-size: 12px;
+          cursor: pointer;
+        ">나중에</button>
+      </div>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Handle update button
+    document.getElementById('update-app').addEventListener('click', () => {
+      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' });
+      }
+      document.body.removeChild(notification);
+    });
+    
+    // Handle dismiss button
+    document.getElementById('dismiss-update').addEventListener('click', () => {
+      document.body.removeChild(notification);
+    });
+    
+    // Auto dismiss after 10 seconds
+    setTimeout(() => {
+      if (document.body.contains(notification)) {
+        document.body.removeChild(notification);
+      }
+    }, 10000);
+  }
+
+  showInstalledNotification() {
+    // Create success notification
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(16, 185, 129, 0.95);
+      color: white;
+      padding: 16px 24px;
+      border-radius: 12px;
+      z-index: 1001;
+      font-family: 'Inter', sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    `;
+    
+    notification.innerHTML = '✅ 앱이 성공적으로 설치되었습니다!';
+    
+    document.body.appendChild(notification);
+    
+    // Auto dismiss after 3 seconds
+    setTimeout(() => {
+      if (document.body.contains(notification)) {
+        document.body.removeChild(notification);
+      }
+    }, 3000);
+  }
+}
+
+// Initialize PWA installer when DOM is loaded
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => {
+    new PWAInstaller();
+  });
+} else {
+  new PWAInstaller();
+}
